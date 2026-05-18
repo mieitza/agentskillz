@@ -1,0 +1,12 @@
+{
+  "name": "vault-memory",
+  "version": "0.2.0",
+  "description": "Shared agent memory across Claude Desktop, Claude Code, and OpenCode. Reads and writes a git-backed markdown vault over MCP. Use whenever the user references a project by name, asks 'what was I working on', recalls a past decision, or wants to remember something across sessions.",
+  "author": {
+    "name": "Mihai Nitulescu",
+    "email": "mihai.nitulescu@gmail.com"
+  },
+  "homepage": "https://github.com/mieitza/agentskillz",
+  "repository": "https://github.com/mieitza/agentskillz",
+  "keywords": ["memory", "vault", "mcp", "context", "filesystem", "git", "shared-memory"]
+}

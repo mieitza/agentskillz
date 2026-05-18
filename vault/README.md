@@ -1,160 +1,121 @@
-# Shared Agent Memory Vault
+# vault — shared agent memory
 
-A single source of truth for project memory across Claude Desktop, Claude
-Code, and OpenCode. Hosted on `agentsmith` (100.83.164.37), reachable
-over Tailscale, exposed via MCP.
+One git-backed markdown vault, served over MCP, used by every agent surface (Claude Desktop / Cowork, Claude Code, OpenCode). Everything in this directory is part of a single integrated system — no glue scripts, no out-of-band patches.
 
 ## Architecture
 
 ```
-                          ┌─────────────────────────────┐
-                          │   agentsmith (Linux box)    │
-                          │   100.83.164.37 (tailscale) │
-                          │                             │
-   Claude Desktop ──SSE──▶│   supergateway :8088        │
-   (Mac)                  │      │                      │
-                          │      ▼                      │
-   Claude Code ───SSE────▶│   @modelcontextprotocol/    │
-   (any machine)          │   server-filesystem (stdio) │
-                          │      │                      │
-   OpenCode ─────SSE─────▶│      ▼                      │
-                          │   /home/misha/vault/        │
-                          │   ├── working/              │
-                          │   ├── reference/            │
-                          │   └── archive/              │
-                          │   (git repo, auto-commits)  │
-                          └─────────────────────────────┘
+                ┌─────────────────────────────────────────────┐
+                │       agentsmith (100.83.164.37)            │
+                │                                             │
+                │   vault-mcp.service   ──► MCP over SSE      │
+                │   vault-watcher.service ─► git autocommit   │
+                │                                             │
+                │   /home/<user>/vault  (git repo)            │
+                │     working/<slug>.md                       │
+                │     reference/                              │
+                │     people/                                 │
+                │     inbox.md                                │
+                └──────────────────▲──────────────────────────┘
+                                   │ HTTP/SSE over Tailscale
+              ┌────────────────────┼─────────────────────┐
+              │                    │                     │
+       Claude Code           Claude Desktop          OpenCode
+       (plugin + hooks)      (.plugin import)        (skill + mcp.json)
 ```
 
-## Installation order
+Every client speaks to the same MCP server. Writes happen through MCP tools (`read_file`, `write_file`, `edit_file`, `commit_and_push`). The server is path-sandboxed: agents see only vault-relative paths, never host paths.
 
-### 1. On agentsmith
+Two commit paths, by design:
+- **Explicit** — agents call `commit_and_push("<message>")` at meaningful checkpoints (the Stop hook does this automatically).
+- **Background safety net** — `vault-watcher.service` polls every 5s and commits anything that's been quiet for 30s, so nothing is ever lost if an agent skips the explicit call.
+
+## Directory map
+
+```
+vault/
+├── server/              MCP server + autocommit watcher (Python)
+│   ├── vault_mcp.py
+│   ├── vault_watcher.py
+│   ├── requirements.txt
+│   ├── vault-mcp.service        systemd unit for the MCP server
+│   └── vault-watcher.service    systemd unit for the watcher
+├── skill/
+│   └── SKILL.md         Canonical vault-memory skill (used by every surface)
+├── plugin/              Claude Desktop / Cowork + Claude Code plugin bundle
+│   ├── .claude-plugin/plugin.json
+│   ├── .mcp.json
+│   ├── commands/        Slash commands: /vault-read /vault-log /vault-status
+│   └── skills/vault-memory/SKILL.md   (copy of skill/SKILL.md)
+├── hooks/               SessionStart + Stop hooks for Claude Code
+│   ├── session-start.sh
+│   └── stop.sh
+└── install/
+    ├── install.sh       One-line installer (server or client, auto-detected)
+    └── uninstall.sh     Clean client uninstall
+```
+
+## Install
+
+One line, anywhere:
 
 ```bash
-scp -r vault-pkg/ misha@100.83.164.37:~/
-ssh misha@100.83.164.37
-cd vault-pkg/server
-./install-vault.sh
+curl -fsSL https://raw.githubusercontent.com/mieitza/agentskillz/main/vault/install/install.sh | bash
 ```
 
-This sets up the vault directory, git repo, systemd service, and
-auto-commit timer. Idempotent — re-run anytime.
+On a Linux server with systemd, it installs the MCP service + watcher.
+On macOS or a non-systemd machine, it installs the client side (plugin + hooks + OpenCode wiring).
 
-Verify it's up:
+Flags:
+
+```
+--server | --client      force a role
+--update                 re-run, overwriting existing files
+--vault-host HOST        MCP host (default 100.83.164.37)
+--vault-port PORT        MCP port (default 8088)
+--vault-root DIR         server-side vault dir (default /home/$USER/vault)
+--branch BRANCH          git branch to fetch (default main)
+--repo URL               source repo (default https://github.com/mieitza/agentskillz)
+```
+
+## Updating
 
 ```bash
-systemctl --user status vault-mcp.service
-curl -v http://100.83.164.37:8088/sse  # from your Mac
+curl -fsSL https://raw.githubusercontent.com/mieitza/agentskillz/main/vault/install/install.sh | bash -s -- --update
 ```
 
-### 2. On your Mac (Claude Desktop)
+Idempotent. Re-runs the same steps with `--update` semantics.
 
-Follow `client/claude-desktop/README.md`. Short version: merge the JSON
-snippet into `~/Library/Application Support/Claude/claude_desktop_config.json`,
-then restart Claude Desktop completely (Cmd+Q).
-
-### 3. On every machine running Claude Code
-
-Follow `client/claude-code/README.md`. Short version:
+## Uninstall (client)
 
 ```bash
-claude mcp add --transport sse vault http://100.83.164.37:8088/sse --scope user
-mkdir -p ~/.claude/hooks ~/.claude/skills
-cp client/claude-code/vault-session-start.sh ~/.claude/hooks/
-cp client/claude-code/vault-session-end.sh ~/.claude/hooks/
-chmod +x ~/.claude/hooks/vault-*.sh
-cp -r skills/vault-memory ~/.claude/skills/
+curl -fsSL https://raw.githubusercontent.com/mieitza/agentskillz/main/vault/install/uninstall.sh | bash
 ```
 
-Then merge the `hooks` snippets into `~/.claude/settings.json`.
+Server uninstall is intentionally manual: `sudo systemctl disable --now vault-mcp vault-watcher && sudo rm -rf /opt/vault-mcp`. The vault itself is never touched by the installer.
 
-### 4. (Optional) OpenCode
+## How the pieces talk
+
+1. Any agent loads the **vault-memory skill** at session start (or on demand) — it teaches the agent the file layout, log format, and which tool to call for which job.
+2. The **plugin** ships the skill, the `/vault-*` slash commands, and the `.mcp.json` so Claude Desktop / Code can find the MCP server.
+3. The **MCP server** (`vault-mcp.service`) exposes `read_file`, `write_file`, `edit_file`, `list_directory`, `search_files`, `commit_and_push`. All paths are vault-relative.
+4. The **SessionStart hook** reminds the agent to load `working/<slug>.md` for the current project before responding.
+5. The **Stop hook** reminds the agent to append a Log entry and call `commit_and_push` if meaningful work happened.
+6. The **watcher** (`vault-watcher.service`) is the safety net: if step 5 is skipped, it autocommits 30s after the last write.
+
+## Landing changes in this repo
+
+The whole tree under `vault/` is the source of truth. To make a change:
 
 ```bash
-cp -r skills/vault-memory ~/.config/opencode/skills/
+git clone git@github.com:mieitza/agentskillz.git
+cd agentskillz
+# edit files under vault/
+git add vault/
+git commit -m "vault: <what changed>"
+git push
 ```
 
-And add the vault MCP server to your `opencode.json`:
+Then on each client and on the server: `curl ... | bash -s -- --update`.
 
-```json
-{
-  "mcp": {
-    "vault": {
-      "type": "sse",
-      "url": "http://100.83.164.37:8088/sse"
-    }
-  }
-}
-```
-
-## First-run: backfill
-
-Once everything is up, seed the working space with the current state of
-your active projects. From any Claude Desktop or Claude Code session
-connected to the vault, paste:
-
-```
-Create these files in the vault's working/ directory with the standard
-frontmatter and sections (Status, Decisions, Open questions, Log):
-
-- cartoon-pipeline.md — Status: bootstrap package built (ComfyUI + Wan 2.2),
-  smoke test ran into OOM on GB10, debugging memory layout. Open Q: which
-  knob — quantization or tiled VAE decode?
-- digisign.md — Status: pitch package sent. Awaiting response from
-  DigiSign CTO/PKI lead.
-- charterpulse.md — Status: full engineering contract bundle complete
-  (CONTRACTS.md, SESSIONS.md, 17 test files). Decision pending: start
-  S1 this week or shelve behind cartoon + digisign.
-- brainmap.md — Status: 11-service system + dashboard + Telegram bot + 9
-  email automations delivered. Invoice pending.
-- affiliate.md — Status: platform delivered (~80h). Invoice pending at
-  "small favor" rate; market price quoted in parallel.
-```
-
-After that, every session has shared context. No more split brain.
-
-## Operating rules
-
-- **Start of session**: agent reads `working/<slug>.md` for the project.
-- **During session**: write decisions as they're made (don't batch).
-- **End of session**: append a dated log entry. The SessionEnd hook nudges.
-- **Closing a project**: move `working/<slug>.md` → `archive/<slug>.md`.
-- **Stable knowledge**: write to `reference/` (e.g. `reference/dgx-spark-gotchas.md`).
-
-## Why this design
-
-- **Files, not a DB.** Markdown is the universal interchange format. Any
-  tool can read and write it. No schema migrations, no daemon to keep
-  running besides the MCP shim.
-- **Git is the WAL.** Every change is committed. Roll back, diff, blame —
-  all free.
-- **Tailscale is the trust boundary.** No OAuth, no API keys. Your
-  tailnet ACLs control access. Port 8088 binds to the Tailscale IP only,
-  not 0.0.0.0.
-- **MCP is the wire protocol.** Both surfaces speak it. Adding more
-  clients (OpenCode, Cursor, custom agents) is a config-only change.
-- **No vendor lock-in.** If MCP dies tomorrow, the vault is still just a
-  folder of markdown files in a git repo. Nothing to migrate.
-
-## Common operations
-
-```bash
-# View recent changes
-cd /home/misha/vault && git log --oneline -20
-
-# Roll back an accidental overwrite
-cd /home/misha/vault && git show HEAD~1:working/charterpulse.md
-
-# Search across the whole vault
-cd /home/misha/vault && rg "decision" --type md
-
-# Move a finished project to archive
-mv /home/misha/vault/working/foo.md /home/misha/vault/archive/foo.md
-
-# Restart the MCP service after editing the unit
-systemctl --user daemon-reload
-systemctl --user restart vault-mcp.service
-
-# Tail service logs
-journalctl --user -u vault-mcp.service -f
-```
+No glue scripts. No `fix_my_mistake.sh`. If something's broken, the fix lands in the same files everyone else pulls.

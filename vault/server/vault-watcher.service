@@ -1,0 +1,26 @@
+[Unit]
+Description=Vault autocommit watcher (debounced git commit + push)
+After=network-online.target vault-mcp.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=misha
+Group=misha
+WorkingDirectory=/home/misha/vault
+Environment=VAULT_ROOT=/home/misha/vault
+Environment=POLL_INTERVAL=5
+Environment=DEBOUNCE_SECONDS=30
+Environment=AUTO_PUSH=1
+ExecStart=/opt/vault-mcp/venv/bin/python -m vault_watcher
+Restart=on-failure
+RestartSec=5s
+
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/misha/vault
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
