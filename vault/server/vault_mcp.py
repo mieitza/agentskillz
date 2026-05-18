@@ -28,12 +28,28 @@ from pathlib import Path
 from typing import Annotated
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from pydantic import Field
 
 VAULT_ROOT = Path(os.environ.get("VAULT_ROOT", "/home/misha/vault")).resolve()
 VAULT_ROOT.mkdir(parents=True, exist_ok=True)
 
-mcp = FastMCP("vault")
+# DNS rebinding protection: FastMCP defaults to a strict allowed-hosts list
+# (localhost + 127.0.0.1) when bound to any non-loopback interface. That blocks
+# every legitimate request from the Tailscale IP with "Invalid Host header".
+#
+# We're not exposed to the public internet — the server binds to 0.0.0.0:8088
+# but the only reachable network is the tailnet behind WireGuard. DNS rebinding
+# attacks require an attacker tricking a browser into resolving a hostname to a
+# private IP they don't control; that vector doesn't apply here because there's
+# no browser involved and no DNS in the path. So turn the protection off and
+# accept any Host header.
+#
+# If you ever expose this beyond Tailscale, flip enable_dns_rebinding_protection
+# back to True and populate allowed_hosts with the specific Tailscale + LAN IPs.
+_SECURITY = TransportSecuritySettings(enable_dns_rebinding_protection=False)
+
+mcp = FastMCP("vault", transport_security=_SECURITY)
 
 
 # ---------- path safety ---------------------------------------------------
