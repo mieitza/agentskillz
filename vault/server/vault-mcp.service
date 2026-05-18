@@ -1,0 +1,25 @@
+[Unit]
+Description=Vault MCP server (markdown vault over SSE)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=misha
+Group=misha
+WorkingDirectory=/home/misha/vault
+Environment=VAULT_ROOT=/home/misha/vault
+Environment=VAULT_BIND=0.0.0.0:8088
+ExecStart=/opt/vault-mcp/venv/bin/python -m vault_mcp
+Restart=on-failure
+RestartSec=3s
+
+# Lock it down a bit. The server only needs to touch the vault and write to git.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/misha/vault
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
