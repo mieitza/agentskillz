@@ -21,8 +21,11 @@ curl -fsSL https://raw.githubusercontent.com/mieitza/agentskillz/main/vault/inst
      installs `~/.claude/skills/vault-memory/SKILL.md`, copies the
      `SessionStart` + `Stop` hooks into `~/.claude/hooks/`, and merges them
      into `~/.claude/settings.json` (idempotent — won't duplicate hooks).
-   - **Claude Desktop**: merges an `mcp-remote`-backed `vault` entry into
-     `claude_desktop_config.json` (macOS/Linux paths handled).
+   - **Claude Desktop / Cowork**: merges an `mcp-remote`-backed `vault` entry
+     into `claude_desktop_config.json` (macOS/Linux paths handled) **and**
+     downloads `vault-memory.plugin` to `~/Downloads/` and opens it — Cowork
+     prompts you to accept the install, which is where the skill + the
+     `/vault-read`, `/vault-log`, `/vault-status` slash commands come from.
    - **OpenCode**: installs the skill into `~/.config/opencode/skills/`
      and merges the SSE MCP entry into `opencode.json`.
    - **Codex CLI**: appends `[mcp_servers.vault]` to `~/.codex/config.toml`

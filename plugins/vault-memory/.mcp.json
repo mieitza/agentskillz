@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "vault": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote@latest",
+        "http://100.83.164.37:8088/servers/vault/sse",
+        "--allow-http",
+        "--transport",
+        "sse-only",
+        "--static-oauth-client-metadata",
+        "{}"
+      ]
+    }
+  }
+}

@@ -229,6 +229,7 @@ install_claude_desktop() {
 
     log "→ Installing for Claude Desktop"
 
+    # 2a. MCP server config (so the `vault` tools are available in Claude Desktop)
     local entry
     entry=$(cat <<JSON
 {
@@ -238,7 +239,30 @@ install_claude_desktop() {
 JSON
 )
     merge_mcp_entry "$cfg" "mcpServers" "vault" "$entry"
-    ok "Claude Desktop: config updated (restart the app with Cmd+Q to load)"
+
+    # 2b. Cowork plugin (so the SKILL + slash commands are available)
+    # Claude Desktop / Cowork doesn't read a skills/ directory — skills come
+    # via plugins. We download the .plugin file to ~/Downloads and tell the
+    # user to open it; Cowork handles the actual install via its plugin UI.
+    local plugin_dst="$HOME/Downloads/vault-memory.plugin"
+    if [[ "$VAULT_DRY_RUN" == "1" ]]; then
+        printf "${c_dim}+ curl -fsSL %s -o %s${c_off}\n" "$REPO_RAW/install/vault-memory.plugin" "$plugin_dst"
+        printf "${c_dim}+ open %s${c_off}\n" "$plugin_dst"
+    else
+        if curl -fsSL "$REPO_RAW/install/vault-memory.plugin" -o "$plugin_dst" 2>/dev/null; then
+            ok "Plugin downloaded to $plugin_dst"
+            log "  Opening it now — accept the install prompt in Cowork to enable the skill + /vault-* commands"
+            if [[ "$OS" == "Darwin" ]] && have open; then
+                open "$plugin_dst" 2>/dev/null || true
+            fi
+        else
+            warn "Couldn't download vault-memory.plugin — fetch it manually:"
+            warn "  curl -fsSLo ~/Downloads/vault-memory.plugin $REPO_RAW/install/vault-memory.plugin"
+            warn "  open ~/Downloads/vault-memory.plugin"
+        fi
+    fi
+
+    ok "Claude Desktop: MCP configured + plugin queued (restart with Cmd+Q after accepting)"
 }
 
 # ---------- 3. OpenCode ----------
