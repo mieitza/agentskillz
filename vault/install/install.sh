@@ -211,6 +211,20 @@ JSON
   install -m 755 "$SRC/hooks/stop.sh"          "$HOME/.claude/hooks/vault/stop.sh"
 
   # Patch settings.json idempotently.
+  #
+  # Claude Code's hooks schema is two-layer:
+  #   "hooks": {
+  #     "SessionStart": [
+  #       { "matcher": "", "hooks": [ { "type": "command", "command": "..." } ] }
+  #     ],
+  #     ...
+  #   }
+  # `matcher` is a tool-name pattern (used by PreToolUse/PostToolUse); for events
+  # like SessionStart and Stop it can be empty string to match everything.
+  # Each inner entry is { type: "command", command: "<path>" }.
+  #
+  # We also clean up any legacy flat entries ({"command": "..."}) from earlier
+  # versions of this installer that wrote the wrong shape.
   local settings="$HOME/.claude/settings.json"
   python3 - "$settings" "$HOME/.claude/hooks/vault" <<'PY'
 import json, sys, pathlib
@@ -221,14 +235,31 @@ if settings_path.exists():
     try:
         settings = json.loads(settings_path.read_text())
     except json.JSONDecodeError:
-        # don't clobber a broken file silently
         raise SystemExit(f"settings.json at {settings_path} is not valid JSON; fix it and re-run --update")
 hooks = settings.setdefault("hooks", {})
 
 def ensure(event, cmd):
     arr = hooks.setdefault(event, [])
-    if not any(isinstance(e, dict) and e.get("command") == cmd for e in arr):
-        arr.append({"command": cmd})
+    # Strip legacy flat entries that referenced this command (wrong shape).
+    arr[:] = [
+        e for e in arr
+        if not (isinstance(e, dict) and e.get("command") == cmd and "hooks" not in e)
+    ]
+    # Find an existing matcher group we can extend, or make a new one.
+    target = None
+    for entry in arr:
+        if isinstance(entry, dict) and entry.get("matcher", "") == "" and isinstance(entry.get("hooks"), list):
+            target = entry
+            break
+    if target is None:
+        target = {"matcher": "", "hooks": []}
+        arr.append(target)
+    # Add the command if not already present.
+    if not any(
+        isinstance(h, dict) and h.get("command") == cmd and h.get("type") == "command"
+        for h in target["hooks"]
+    ):
+        target["hooks"].append({"type": "command", "command": cmd})
 
 ensure("SessionStart", f"{hooks_dir}/session-start.sh")
 ensure("Stop",         f"{hooks_dir}/stop.sh")

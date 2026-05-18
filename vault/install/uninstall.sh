@@ -22,14 +22,34 @@ import json, pathlib, sys
 p = pathlib.Path(sys.argv[1])
 data = json.loads(p.read_text())
 hooks = data.get("hooks", {})
+
+def is_vault_cmd(s):
+    return isinstance(s, str) and "/hooks/vault/" in s
+
 for ev in ("SessionStart", "Stop"):
-    if ev in hooks:
-        hooks[ev] = [e for e in hooks[ev]
-                     if not (isinstance(e, dict)
-                             and isinstance(e.get("command",""), str)
-                             and "/hooks/vault/" in e["command"])]
-        if not hooks[ev]:
-            del hooks[ev]
+    if ev not in hooks:
+        continue
+    new_arr = []
+    for entry in hooks[ev]:
+        if not isinstance(entry, dict):
+            new_arr.append(entry)
+            continue
+        # Legacy flat shape: {"command": "..."}
+        if "command" in entry and "hooks" not in entry:
+            if not is_vault_cmd(entry.get("command")):
+                new_arr.append(entry)
+            continue
+        # Current shape: {"matcher": "", "hooks": [{"type": "command", "command": "..."}, ...]}
+        inner = entry.get("hooks", [])
+        kept = [h for h in inner if not (isinstance(h, dict) and is_vault_cmd(h.get("command")))]
+        if kept:
+            entry["hooks"] = kept
+            new_arr.append(entry)
+        # else: matcher group becomes empty, drop the whole entry
+    if new_arr:
+        hooks[ev] = new_arr
+    else:
+        del hooks[ev]
 p.write_text(json.dumps(data, indent=2) + "\n")
 PY
 fi
