@@ -1,0 +1,19 @@
+{
+  "name": "mieitza",
+  "owner": {
+    "name": "Mihai",
+    "email": "mn@a3olus.ro"
+  },
+  "metadata": {
+    "description": "A3olus shared agent skills and plugins",
+    "homepage": "https://github.com/mieitza/agentskillz"
+  },
+  "plugins": [
+    {
+      "name": "vault-memory",
+      "version": "0.2.0",
+      "source": "./vault/plugin",
+      "description": "Shared agent memory across Claude Desktop, Claude Code, and OpenCode."
+    }
+  ]
+}
