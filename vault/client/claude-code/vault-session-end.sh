@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # vault-session-end.sh — fires on Stop (when Claude finishes responding).
 #
-# We don't want to fire on every single Stop (that would be every assistant
-# turn). Instead, we use a marker file to fire only once per session, and
-# only if the session has been long enough to be worth recording.
+# Fires only once per session via a marker file in /tmp. The output uses
+# top-level `systemMessage` because Claude Code's current Stop hook schema
+# does NOT accept `hookSpecificOutput.additionalContext` (that's only valid
+# for PreToolUse / UserPromptSubmit / PostToolUse / PostToolBatch).
 #
-# The hint is non-blocking — it just appears in Claude's context as a
-# nudge. Claude decides whether to act on it.
+# `systemMessage` surfaces as a non-blocking system note Claude sees once.
+# It can decide whether to act on it.
 set -euo pipefail
 
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
@@ -20,16 +21,16 @@ if [[ -f "$MARKER" ]]; then
 fi
 touch "$MARKER"
 
-# Don't nag on trivial sessions — check that the session is at least
-# ~5 minutes old (heuristic: the marker file just got created, so we
-# can't measure session length directly; instead the hook is conservative
-# and always emits, but only once).
+# Properly JSON-escape the message body so quotes / backslashes / newlines
+# can't corrupt the payload.
+MSG="Session is wrapping up. If meaningful work was done on project '${SLUG}', append a new dated log entry to working/${SLUG}.md in the vault using the vault MCP tools. Format: '### YYYY-MM-DD HH:MM — claude-code' followed by 2-5 bullet points covering: what was decided/built, what changed in the codebase, any new open questions. Skip this if the session was trivial (one question, no code changes)."
 
-cat <<EOF
-{
-  "hookSpecificOutput": {
-    "hookEventName": "Stop",
-    "additionalContext": "Session is wrapping up. If meaningful work was done on project '$SLUG', append a new dated log entry to working/$SLUG.md in the vault using the vault MCP tools. Format: '### YYYY-MM-DD HH:MM — claude-code' followed by 2-5 bullet points covering: what was decided/built, what changed in the codebase, any new open questions. Skip this if the session was trivial (one question, no code changes)."
-  }
-}
-EOF
+# Use python (always present) to emit valid JSON.
+python3 - "$MSG" <<'PY'
+import json, sys
+print(json.dumps({
+    "continue": True,
+    "suppressOutput": True,
+    "systemMessage": sys.argv[1]
+}))
+PY
