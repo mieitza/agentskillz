@@ -62,23 +62,21 @@ warn() { c_yellow "  warn: $*"; }
 die()  { c_red "  err: $*"; exit 1; }
 
 # ---------- role detection ----------
+# Default to client everywhere. Server install is a deliberate act: pass --server.
+# Rationale: every machine is a client (you want agents wired up there). Only one
+# machine — the one running the MCP — is the server, and you know which one it is.
+# Auto-detection based on writable /etc/systemd was a footgun (failed silently on
+# a normal user account on the actual server box, leaving us with no MCP running).
 detect_role() {
   if [[ -n "$ROLE" ]]; then return; fi
+  ROLE="client"
   case "$(uname -s)" in
     Linux)
-      # If systemd is around and we can write under /etc/systemd, default to server.
-      # Otherwise client.
-      if command -v systemctl >/dev/null 2>&1 && [[ -w /etc/systemd/system || $EUID -eq 0 ]]; then
-        ROLE="server"
-      else
-        ROLE="client"
+      # Friendly hint: if you're on Linux with systemd and you meant to install the
+      # server here, tell us. We won't guess.
+      if command -v systemctl >/dev/null 2>&1; then
+        warn "defaulting to client install. If you meant to install the MCP server here, re-run with --server."
       fi
-      ;;
-    Darwin)
-      ROLE="client"
-      ;;
-    *)
-      ROLE="client"
       ;;
   esac
 }

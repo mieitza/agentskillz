@@ -7,7 +7,8 @@ Wants=network-online.target
 Type=simple
 User=misha
 Group=misha
-WorkingDirectory=/home/misha/vault
+# WorkingDirectory is /opt/vault-mcp so `-m vault_watcher` finds vault_watcher.py.
+WorkingDirectory=/opt/vault-mcp
 Environment=VAULT_ROOT=/home/misha/vault
 Environment=POLL_INTERVAL=5
 Environment=DEBOUNCE_SECONDS=30
@@ -16,9 +17,9 @@ ExecStart=/opt/vault-mcp/venv/bin/python -m vault_watcher
 Restart=on-failure
 RestartSec=5s
 
+# See note on vault-mcp.service: ProtectHome would block writes to /home/.
 NoNewPrivileges=yes
 ProtectSystem=strict
-ProtectHome=read-only
 ReadWritePaths=/home/misha/vault
 PrivateTmp=yes
 

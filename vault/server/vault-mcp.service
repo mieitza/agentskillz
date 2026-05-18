@@ -7,7 +7,9 @@ Wants=network-online.target
 Type=simple
 User=misha
 Group=misha
-WorkingDirectory=/home/misha/vault
+# WorkingDirectory is /opt/vault-mcp so `-m vault_mcp` finds vault_mcp.py.
+# VAULT_ROOT (where the markdown vault lives) is set via env, NOT cwd.
+WorkingDirectory=/opt/vault-mcp
 Environment=VAULT_ROOT=/home/misha/vault
 Environment=VAULT_BIND=0.0.0.0:8088
 ExecStart=/opt/vault-mcp/venv/bin/python -m vault_mcp
@@ -15,9 +17,10 @@ Restart=on-failure
 RestartSec=3s
 
 # Lock it down a bit. The server only needs to touch the vault and write to git.
+# NOTE: ProtectHome=read-only would block writes under /home/, which is exactly
+# where the vault lives — leave it off and rely on ReadWritePaths + ProtectSystem.
 NoNewPrivileges=yes
 ProtectSystem=strict
-ProtectHome=read-only
 ReadWritePaths=/home/misha/vault
 PrivateTmp=yes
 
