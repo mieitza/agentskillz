@@ -253,7 +253,11 @@ JSON
             ok "Plugin downloaded to $plugin_dst"
             log "  Opening it now — accept the install prompt in Cowork to enable the skill + /vault-* commands"
             if [[ "$OS" == "Darwin" ]] && have open; then
-                open "$plugin_dst" 2>/dev/null || true
+                # `.plugin` isn't registered as a default extension, so hand
+                # it to Claude.app explicitly (Cowork picks it up from there).
+                open -a "Claude" "$plugin_dst" 2>/dev/null \
+                    || open "$plugin_dst" 2>/dev/null \
+                    || true
             fi
         else
             warn "Couldn't download vault-memory.plugin — fetch it manually:"
