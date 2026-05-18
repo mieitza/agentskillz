@@ -160,7 +160,7 @@ README
 
   echo ""
   c_green "Server install complete."
-  echo "  MCP endpoint: http://$(hostname -I | awk '{print $1}'):$VAULT_PORT/servers/vault/sse"
+  echo "  MCP endpoint: http://$(hostname -I | awk '{print $1}'):$VAULT_PORT/sse"
   echo "  Vault root:   $VAULT_ROOT_SERVER"
   echo "  Status:       systemctl status vault-mcp vault-watcher"
 }
@@ -182,7 +182,7 @@ host = sys.argv[2]; port = sys.argv[3]
 cfg = json.loads(p.read_text())
 cfg["mcpServers"]["vault"]["args"] = [
   "-y", "mcp-remote@latest",
-  f"http://{host}:{port}/servers/vault/sse",
+  f"http://{host}:{port}/sse",
   "--allow-http", "--transport", "sse-only",
   "--static-oauth-client-metadata", "{}"
 ]
@@ -255,7 +255,7 @@ with zipfile.ZipFile(io.BytesIO(data)) as zin:
 cfg = json.loads(members[".mcp.json"])
 cfg["mcpServers"]["vault"]["args"] = [
   "-y", "mcp-remote@latest",
-  f"http://{host}:{port}/servers/vault/sse",
+  f"http://{host}:{port}/sse",
   "--allow-http", "--transport", "sse-only",
   "--static-oauth-client-metadata", "{}"
 ]
@@ -298,7 +298,7 @@ servers["vault"] = {
   "command": "npx",
   "args": [
     "-y", "mcp-remote@latest",
-    f"http://{host}:{port}/servers/vault/sse",
+    f"http://{host}:{port}/sse",
     "--allow-http", "--transport", "sse-only",
     "--static-oauth-client-metadata", "{}"
   ]
@@ -335,7 +335,7 @@ install_client() {
   c_green "Client install complete."
   echo "  Verify Claude Code: ls ~/.claude/plugins/cache/vault-memory-local/vault-memory/0.2.0"
   echo "  Verify hooks:       jq .hooks ~/.claude/settings.json"
-  echo "  Vault MCP target:   http://$VAULT_HOST:$VAULT_PORT/servers/vault/sse"
+  echo "  Vault MCP target:   http://$VAULT_HOST:$VAULT_PORT/sse"
 }
 
 # ---------- main ----------

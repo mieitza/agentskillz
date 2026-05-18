@@ -15,7 +15,7 @@ Tools:
   - search_files(query, glob)        # ripgrep over the vault
   - commit_and_push(message)         # explicit checkpoint by an agent
 
-Transport: SSE on /servers/vault/sse (mounted by mcp-proxy or run direct).
+Transport: FastMCP's native SSE endpoint at /sse.
 Config:    env VAULT_ROOT (default /home/misha/vault), VAULT_BIND (default 0.0.0.0:8088).
 """
 from __future__ import annotations
